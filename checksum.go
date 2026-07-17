@@ -103,7 +103,7 @@ func (asset Asset) toOriginalAsset() {
 			if originalFileName, ok := n.(string); ok {
 				extension := strings.ToLower(path.Ext(originalFileName))
 				if (downloadJpgFromJxl && extension == ".jxl") || (downloadJpgFromAvif && extension == ".avif") {
-					asset["originalFileName"] = originalFileName + ".jpg"
+					asset["originalFileName"] = swapExtToJpg(originalFileName)
 				}
 			}
 		}

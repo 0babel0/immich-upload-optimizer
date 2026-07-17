@@ -81,10 +81,17 @@ func replaceAllBytes(byteSlice []byte, old []byte, new []byte) []byte {
 // contentDispositionToJpg rewrites the filename in a Content-Disposition header so
 // its source extension (.jxl/.avif) is replaced by .jpg, instead of appending ".jpg"
 // to the whole header (which would yield "name.jxl.jpg" or place it after the quote).
-var contentDispositionExtRe = regexp.MustCompile(`(?i)\.(jxl|avif)(?=["']|;|\s|$)`)
+// Go's RE2 has no lookahead, so the trailing delimiter is captured and restored.
+var contentDispositionExtRe = regexp.MustCompile(`(?i)\.(?:jxl|avif)($|["';\s])`)
 
 func contentDispositionToJpg(cd string) string {
-	return contentDispositionExtRe.ReplaceAllString(cd, ".jpg")
+	return contentDispositionExtRe.ReplaceAllString(cd, ".jpg${1}")
+}
+
+// swapExtToJpg replaces a filename's extension with .jpg (extension swap, not a
+// suffix append), e.g. "photo.jxl" -> "photo.jpg".
+func swapExtToJpg(name string) string {
+	return strings.TrimSuffix(name, filepath.Ext(name)) + ".jpg"
 }
 
 func humanReadableSize(size int64) string {
