@@ -250,8 +250,21 @@ func downloadAndConvertImage(w http.ResponseWriter, r *http.Request, logger *cus
 		if !bytes.Equal(signature, []byte{0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A}) {
 			return errors.New("bad jxl signature")
 		}
+		// Bit-exact JPEG reconstruction only works when the jxl carries JPEG
+		// bitstream reconstruction data (jbrd), i.e. it was produced by
+		// `cjxl --lossless_jpeg=1` from a real jpeg. jxl transcoded from webp/heic
+		// has no jbrd, so djxl cannot reconstruct the original jpeg.
 		if output, err = exec.Command("djxl", blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "djxl") {
 			return
+		}
+		if !bytes.Contains(bytes.ToLower(output), []byte("reconstructed to jpeg")) {
+			// No jbrd (or the djxl build failed to reconstruct). Never serve a
+			// possibly-corrupt file: explicitly decode the pixels and encode a new,
+			// valid jpeg. The result is NOT bit-exact to any original jpeg.
+			logger.Print(yellow("jxl has no JPEG reconstruction data (jbrd); re-encoding pixels to a non bit-exact jpg (q95): %s", assetUUID))
+			if output, err = exec.Command("djxl", "--pixels_to_jpeg", "-q", "95", blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "djxl pixel re-encode") {
+				return
+			}
 		}
 	case AVIF:
 		if !bytes.Equal(signature[4:], []byte("ftypavif")) {
@@ -269,6 +282,20 @@ func downloadAndConvertImage(w http.ResponseWriter, r *http.Request, logger *cus
 		return
 	}
 	defer func() { open.Close(); _ = os.Remove(open.Name()) }()
+	// Guard against serving a truncated/corrupt body: require a valid JPEG SOI
+	// marker. On failure we return the error and handleRequest falls through to
+	// proxying the original asset untouched.
+	jpegSOI := make([]byte, 2)
+	if _, err = io.ReadFull(open, jpegSOI); err != nil || jpegSOI[0] != 0xFF || jpegSOI[1] != 0xD8 {
+		if err == nil {
+			err = errors.New("converted output is not a valid jpeg")
+		}
+		logger.Error(err, "jpg validate")
+		return
+	}
+	if _, err = open.Seek(0, io.SeekStart); logger.Error(err, "jpg seek") {
+		return
+	}
 	// Forward upstream headers without Accept-Ranges and with .jpg filename extension
 	setHeaders(w.Header(), resp.Header)
 	w.Header().Del("Content-Encoding")
