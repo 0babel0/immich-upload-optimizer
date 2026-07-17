@@ -78,7 +78,7 @@ FROM debian:sid-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y update && apt-get install -qq -y --no-install-recommends \
     #libvips-tools \
-    #exiftool \
+    libimage-exiftool-perl \
     #handbrake-cli \
     ffmpeg \
     # ImageMagick deps
