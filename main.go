@@ -40,6 +40,7 @@ var configFile string
 var checksumsFile string
 var downloadJpgFromJxl bool
 var downloadJpgFromAvif bool
+var downloadJpgQuality uint
 var forceColors bool
 
 var config *Config
@@ -52,6 +53,7 @@ func init() {
 	viper.BindEnv("tasks_file")
 	viper.BindEnv("download_jpg_from_jxl")
 	viper.BindEnv("download_jpg_from_avif")
+	viper.BindEnv("download_jpg_quality")
 	viper.BindEnv("max_image_jobs")
 	viper.BindEnv("max_video_jobs")
 	viper.BindEnv("force_colors")
@@ -62,6 +64,7 @@ func init() {
 	viper.SetDefault("checksums_file", "checksums.csv")
 	viper.SetDefault("download_jpg_from_jxl", false)
 	viper.SetDefault("download_jpg_from_avif", false)
+	viper.SetDefault("download_jpg_quality", 95)
 	viper.SetDefault("max_image_jobs", 5)
 	viper.SetDefault("max_video_jobs", 1)
 	viper.SetDefault("force_colors", true)
@@ -73,6 +76,7 @@ func init() {
 	flag.StringVar(&checksumsFile, "checksums_file", viper.GetString("checksums_file"), "Path to the checksums file")
 	flag.BoolVar(&downloadJpgFromJxl, "download_jpg_from_jxl", viper.GetBool("download_jpg_from_jxl"), "Converts JXL images to JPG on download for wider compatibility")
 	flag.BoolVar(&downloadJpgFromAvif, "download_jpg_from_avif", viper.GetBool("download_jpg_from_avif"), "Converts AVIF images to JPG on download for wider compatibility")
+	flag.UintVar(&downloadJpgQuality, "download_jpg_quality", viper.GetUint("download_jpg_quality"), "JPEG quality (1-100) for download conversions that must re-encode pixels (no bit-exact reconstruction)")
 	flag.UintVar(&maxImageJobs, "max_image_jobs", viper.GetUint("max_image_jobs"), "Max number of image jobs running concurrently")
 	flag.UintVar(&maxVideoJobs, "max_video_jobs", viper.GetUint("max_video_jobs"), "Max number of video jobs running concurrently")
 	flag.BoolVar(&forceColors, "force_colors", viper.GetBool("force_colors"), "Force colored output even in non-TTY environments like Docker")
@@ -261,8 +265,9 @@ func downloadAndConvertImage(w http.ResponseWriter, r *http.Request, logger *cus
 			// No jbrd (or the djxl build failed to reconstruct). Never serve a
 			// possibly-corrupt file: explicitly decode the pixels and encode a new,
 			// valid jpeg. The result is NOT bit-exact to any original jpeg.
-			logger.Print(yellow("jxl has no JPEG reconstruction data (jbrd); re-encoding pixels to a non bit-exact jpg (q95): %s", assetUUID))
-			if output, err = exec.Command("djxl", "--pixels_to_jpeg", "-q", "95", blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "djxl pixel re-encode") {
+			quality := strconv.FormatUint(uint64(downloadJpgQuality), 10)
+			logger.Print(yellow("jxl has no JPEG reconstruction data (jbrd); re-encoding pixels to a non bit-exact jpg (q%s): %s", quality, assetUUID))
+			if output, err = exec.Command("djxl", "--pixels_to_jpeg", "-q", quality, blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "djxl pixel re-encode") {
 				return
 			}
 		}
@@ -270,7 +275,7 @@ func downloadAndConvertImage(w http.ResponseWriter, r *http.Request, logger *cus
 		if !bytes.Equal(signature[4:], []byte("ftypavif")) {
 			return errors.New("bad avif signature")
 		}
-		if output, err = exec.Command("avifdec", "-q", "95", blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "avifdec") {
+		if output, err = exec.Command("avifdec", "-q", strconv.FormatUint(uint64(downloadJpgQuality), 10), blob.Name(), blob.Name()+".jpg").CombinedOutput(); logger.Error(err, "avifdec") {
 			return
 		}
 	default:
