@@ -2,3 +2,4 @@
 go.sum
 go_build
 *.csv
+client-config
