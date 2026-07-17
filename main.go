@@ -276,7 +276,7 @@ func downloadAndConvertImage(w http.ResponseWriter, r *http.Request, logger *cus
 	w.Header().Del("Accept-Ranges")
 	w.Header().Set("Content-Type", "image/jpeg")
 	if cd := w.Header().Get("Content-Disposition"); cd != "" {
-		w.Header().Set("Content-Disposition", cd+".jpg")
+		w.Header().Set("Content-Disposition", contentDispositionToJpg(cd))
 	}
 	if fi, statErr := open.Stat(); statErr == nil {
 		w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))

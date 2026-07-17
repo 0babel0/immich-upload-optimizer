@@ -78,6 +78,15 @@ func replaceAllBytes(byteSlice []byte, old []byte, new []byte) []byte {
 	return byteSlice
 }
 
+// contentDispositionToJpg rewrites the filename in a Content-Disposition header so
+// its source extension (.jxl/.avif) is replaced by .jpg, instead of appending ".jpg"
+// to the whole header (which would yield "name.jxl.jpg" or place it after the quote).
+var contentDispositionExtRe = regexp.MustCompile(`(?i)\.(jxl|avif)(?=["']|;|\s|$)`)
+
+func contentDispositionToJpg(cd string) string {
+	return contentDispositionExtRe.ReplaceAllString(cd, ".jpg")
+}
+
 func humanReadableSize(size int64) string {
 	const (
 		_  = iota // ignore first value by assigning to blank identifier
