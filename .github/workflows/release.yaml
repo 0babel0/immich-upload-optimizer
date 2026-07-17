@@ -26,6 +26,9 @@ jobs:
           go-version: 'stable'
           check-latest: true
       -
+        name: Set lowercase registry owner
+        run: echo "REGISTRY_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       -
