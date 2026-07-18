@@ -208,7 +208,15 @@ func newJob(r *http.Request, w http.ResponseWriter, logger *customLogger) error 
 		if err = taskProcessor.Run(); err != nil {
 			return fmt.Errorf("job %d: failed to process file: %v", jobID, err.Error())
 		}
-		if taskProcessor.OriginalSize <= taskProcessor.ProcessedSize {
+		// A task can exit 0 and still leave an empty output file, e.g. a converter that
+		// fails without writing anything followed by a `touch` that creates it. Uploading
+		// that would store a 0 byte asset, and every empty file shares the same checksum
+		// so Immich rejects the next ones as duplicates. Keep the original instead.
+		if taskProcessor.ProcessedSize == 0 {
+			jobLogger.Print(red("task %s produced an empty file, uploading the original instead", taskProcessor.Task.Name))
+			uploadFile = taskProcessor.OriginalFile
+			_ = taskProcessor.CleanWorkDir()
+		} else if taskProcessor.OriginalSize <= taskProcessor.ProcessedSize {
 			uploadFile = taskProcessor.OriginalFile
 			_ = taskProcessor.CleanWorkDir() // Save RAM before upload (tmpfs)
 		} else {
