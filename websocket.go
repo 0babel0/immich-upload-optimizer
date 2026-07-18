@@ -13,16 +13,6 @@ import (
 // WebSocket42 A message starting with the number 42 and then a JSON array. The 1st element is the action/event e.g. on_upload_success, on_asset_delete. Other elements vary depending on the action
 type WebSocket42 []any
 
-func (wsMsg WebSocket42) getAction() string {
-	if len(wsMsg) < 2 {
-		return ""
-	}
-	if v, ok := wsMsg[0].(string); ok {
-		return v
-	}
-	return ""
-}
-
 func (wsMsg WebSocket42) getUploadSuccessAsset() Asset {
 	if len(wsMsg) < 2 {
 		return nil
@@ -64,16 +54,21 @@ func handleWebSocketConn(cliConn, srvConn *websocket.Conn, logger *customLogger)
 				if err = json.Unmarshal(message[2:], &wsMsg); logger.Error(err, "json unmarshal") {
 					continue
 				}
-				var asset Asset
-				switch wsMsg.getAction() {
-				case "on_upload_success":
-					asset = wsMsg.getUploadSuccessAsset()
-				case "AssetUploadReadyV1":
-					asset = wsMsg.getUploadReadyAsset()
+				// Event names are versioned by Immich (e.g. AssetUploadReadyV1 -> ...V2), so
+				// don't match on the action: try both payload shapes that can carry an asset.
+				// toOriginalAsset is a no-op on payloads without a known checksum.
+				assets := make([]Asset, 0, 2)
+				if a := wsMsg.getUploadSuccessAsset(); a != nil {
+					assets = append(assets, a)
 				}
-				if asset != nil {
+				if a := wsMsg.getUploadReadyAsset(); a != nil {
+					assets = append(assets, a)
+				}
+				if len(assets) > 0 {
 					mapLock.RLock()
-					asset.toOriginalAsset()
+					for _, asset := range assets {
+						asset.toOriginalAsset()
+					}
 					mapLock.RUnlock()
 					if message, err = json.Marshal(wsMsg); logger.Error(err, "json encode") {
 						continue

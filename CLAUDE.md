@@ -62,6 +62,22 @@ The download path handles this by re-encoding pixels explicitly (`djxl --pixels_
 and validating the JPEG SOI marker (`FF D8`) before serving; on failure it returns an error so
 the original asset is proxied untouched.
 
+## Immich sync entity types: never match on a hardcoded list
+
+Immich **versions its sync entity types and deprecates the old names**: `/api/sync/stream`
+emitted `AssetV1` / `AlbumAsset*V1` / `PartnerAsset*V1` up to server v2, and emits
+`AssetV2` / `AlbumAsset*V2` / `PartnerAsset*V2` from v3 (the V1 names still exist, marked
+deprecated, so a grep for them still "looks right"). All the V2 asset types reuse the
+`SyncAssetV2` schema, which keeps `checksum` and `originalFileName` as top-level fields
+of `data`.
+
+Filtering these events by a hardcoded type whitelist is a **silent time bomb**: after a
+server upgrade the new type is skipped, checksums are no longer rewritten, and the app
+concludes every asset is missing — it re-uploads the whole library and shows a duplicated
+local-only/cloud-only entry per photo. The stream and websocket handlers therefore rewrite
+**any payload that carries asset data**; `toOriginalAsset` is a no-op when the checksum is
+unknown or the fields are absent. Keep it that way.
+
 ## Build / run
 
 **No Go toolchain is assumed on the dev host** — verify before running `go` commands.

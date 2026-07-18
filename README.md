@@ -32,6 +32,8 @@ Immich Upload Optimizer (IUO) is a proxy designed to be placed in front of the [
 - **Correct `.jpg` naming on JXL/AVIF download** — the download filename and the name shown in the Immich app info panel now replace the source extension (`photo.jpg`) instead of appending it (`photo.jxl.jpg`). The displayed name is recomputed on every response, so existing assets are fixed without any migration.
 - **Safe JXL→JPG conversion without jbrd** — a JXL transcoded from a non-JPEG source (e.g. WEBP) cannot be reconstructed bit-exactly. IUO now detects this, re-encodes the pixels to a valid JPEG, and validates the JPEG marker before serving; on failure it proxies the original untouched. No more silent corruption.
 - **Configurable re-encode quality** — `IUO_DOWNLOAD_JPG_QUALITY` (default `95`) controls the JPEG quality of pixel re-encodes (JXL without jbrd, and AVIF).
+- **Never uploads an empty file** — a task that exits 0 but produces a 0 byte output (e.g. a converter that fails, followed by `touch`) no longer replaces the asset; the original is uploaded instead.
+- **Immich v3 sync fixed** — Immich v3 emits `AssetV2`/`AlbumAsset*V2`/`PartnerAsset*V2` sync events where v2 emitted the `*V1` variants. Checksum rewriting no longer depends on a hardcoded type list, so the app stops seeing every asset as un-backed-up (whole-library re-upload, and a duplicated local-only/cloud-only entry per photo).
 
 ## 🐋 Usage via Docker compose
 

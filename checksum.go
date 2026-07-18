@@ -262,11 +262,14 @@ func (replacer Replacer) Replace() (err error) {
 			if err = json.Unmarshal(fixedJsonBuf, &streams); logger.Error(err, "json unmarshal") {
 				return
 			}
+			// Immich versions the sync entity types and deprecates the old names: v3 emits
+			// AssetV2 / AlbumAsset*V2 / PartnerAsset*V2 where v2 emitted the V1 variants.
+			// Matching on a hardcoded list silently stops rewriting checksums after a server
+			// upgrade, which makes the app treat every asset as missing and re-upload it.
+			// Rewrite any event carrying asset data instead: toOriginalAsset is a no-op when
+			// the checksum is unknown or the fields are absent.
 			for _, value := range streams {
 				if v, ok := value.(map[string]any); ok {
-					if t, ok := v["type"].(string); ok && !slices.Contains([]string{"AssetV1", "AlbumAssetCreateV1", "AlbumAssetUpdateV1", "AlbumAssetBackfillV1", "PartnerAssetV1", "PartnerAssetBackfillV1"}, t) {
-						continue
-					}
 					if asset, ok := v["data"].(map[string]any); ok {
 						mapLock.RLock()
 						Asset(asset).toOriginalAsset()
